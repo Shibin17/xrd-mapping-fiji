@@ -38,7 +38,8 @@ ss.setdefault("raw_ref_images", {})      # stem -> temp path (for PDF report)
 ss.setdefault("params", {"prominence": 0.05, "window": 5, "tolerance": 0.2})
 ss.setdefault("fiji_path", find_fiji() or "")
 ss.setdefault("extracted_csvs", {})
-ss.setdefault("macro_path", r"C:\Users\Admin\Desktop\xrd_mapping\fiji\xrd_batch_extractor_v4_fixed (1).ijm")
+_DEFAULT_MACRO = str(Path(__file__).parent / "xrd_batch_extractor_v4_fixed (1).ijm")
+ss.setdefault("macro_path", _DEFAULT_MACRO)
 _DEFAULT_BASE = Path.cwd() / "xrd_csvs"
 ss.setdefault("ref_output_dir", str(_DEFAULT_BASE / "references"))
 ss.setdefault("sample_output_dir", str(_DEFAULT_BASE / "samples"))
@@ -87,6 +88,53 @@ def _load_csvs_from(folder: str) -> dict[str, XRDPattern]:
     return out
 
 
+def _csv_uploader_fallback():
+    """Cloud fallback: upload CSVs directly instead of running Fiji."""
+    st.info(
+        "**Fiji is not available in this environment** (cloud deployment). "
+        "Extract CSVs locally using Fiji, then upload them below — "
+        "or use **1 · Upload** to load them."
+    )
+    st.divider()
+
+    st.subheader("Step 1 — Upload Reference CSVs")
+    ref_files = st.file_uploader(
+        "Reference CSVs (`*_extracted.csv`)", type=["csv", "txt", "tsv"],
+        accept_multiple_files=True, key="extract_refs_up",
+    )
+    if ref_files:
+        ss.references = {}
+        for f in ref_files:
+            try:
+                ss.references[f.name] = load_xrd_csv(f, name=f.name)
+            except Exception as e:
+                st.error(f"{f.name}: {e}")
+        if ss.references:
+            st.success(f"Loaded {len(ss.references)} reference(s).")
+
+    st.divider()
+    st.subheader("Step 2 — Upload Sample CSVs")
+    sam_files = st.file_uploader(
+        "Sample CSVs (`*_extracted.csv`)", type=["csv", "txt", "tsv"],
+        accept_multiple_files=True, key="extract_sams_up",
+    )
+    if sam_files:
+        ss.samples = {}
+        for f in sam_files:
+            try:
+                ss.samples[f.name] = load_xrd_csv(f, name=f.name)
+            except Exception as e:
+                st.error(f"{f.name}: {e}")
+        if ss.samples:
+            st.success(f"Loaded {len(ss.samples)} sample(s).")
+
+    st.divider()
+    st.subheader("Current data loaded")
+    st.write(f"**Samples:** {len(ss.samples)}  ·  **References:** {len(ss.references)}")
+    if ss.samples and ss.references:
+        st.info("Ready — proceed to **2 · Analyze** or **3 · Compare**.")
+
+
 def page_extract():
     st.header("0 · Extract CSVs from images with Fiji")
     st.caption(
@@ -95,10 +143,12 @@ def page_extract():
     )
 
     detected = find_fiji(ss.fiji_path or None)
-    if detected:
-        st.success(f"Fiji detected: `{detected}`")
-    else:
-        st.warning("Fiji not found automatically.")
+
+    if not detected:
+        _csv_uploader_fallback()
+        return
+
+    st.success(f"Fiji detected: `{detected}`")
     ss.fiji_path = st.text_input("Fiji executable path", value=ss.fiji_path)
     ss.macro_path = st.text_input("Macro (.ijm) path", value=ss.macro_path)
 
