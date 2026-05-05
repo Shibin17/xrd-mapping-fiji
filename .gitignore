@@ -1,0 +1,12 @@
+# Fiji application (large binary, not project code)
+Fiji/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+env/
+.venv/
